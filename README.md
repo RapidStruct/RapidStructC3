@@ -246,4 +246,7 @@ fn int main()
 
 	return 0;
 }
+
 ~~~
+
+Copyright (c) 2026, Noah McLean
