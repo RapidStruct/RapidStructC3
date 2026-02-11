@@ -23,7 +23,7 @@ SOFTWARE.
 module rapidstruct;
 import std::core::mem;
 
-faultdef ARENA_OUT_OF_MEMORY, UNDEFINED_SCHEMA_TAG, SCHEMA_DEFINITION_MISMATCH;
+faultdef RS_ARENA_OUT_OF_MEMORY, RS_UNDEFINED_SCHEMA_TAG, RS_SCHEMA_DEFINITION_MISMATCH, RS_FIELD_TOO_LONG, RS_STRUCT_UNDERFLOW;
 alias Byte = char;
 const uint EXPANSION_INCREMENT = 4096;
 
@@ -304,7 +304,7 @@ fn void? RS_Field.putString(&this, String s, RS_Processor* proc)
 {
 	Byte* buffer = (Byte*) allocOnArena(proc.arena, s.len);
 	if(!buffer) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
 	mem::copy(buffer, &s[0], s.len);
@@ -322,7 +322,7 @@ fn void? RS_Field.putBytes(&this, Byte* bytes, int length, RS_Processor* proc)
 {
     Byte* buffer = (Byte*) allocOnArena(proc.arena, length);
 	if(!buffer) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     mem::copy(buffer, bytes, length);
@@ -501,7 +501,7 @@ fn void? setStructMemory(RS_Struct* rs_struct, RS_Processor* proc)
     RS_Field** fieldArray = (RS_Field**) allocOnArena(proc.arena, RS_Field*.sizeof * rs_struct.fieldCapacity);
 
 	if(!schemaKeyArray || !fieldArray) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     rs_struct.schemaKeys = schemaKeyArray;
@@ -520,7 +520,7 @@ fn void? _struct_expandFieldArray(RS_Struct* rs_struct, RS_Processor* proc) @pri
 	RS_Field** newFieldArray = (RS_Field**) allocOnArena(proc.arena, RS_Field*.sizeof * newfieldCapacity);
 
 	if(!newSchemaKeyArray || !newFieldArray) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
 	mem::copy(newSchemaKeyArray, rs_struct.schemaKeys, rs_struct.fieldCount);
@@ -557,11 +557,11 @@ fn void? RS_Struct.add(&this, String tag, RS_Field* field, RS_Processor* proc)
 {
     int schemaKey = this.schema.getSchemaKey(tag);
     if(schemaKey == -1) {
-		return UNDEFINED_SCHEMA_TAG~;
+		return RS_UNDEFINED_SCHEMA_TAG~;
     }
 
 	if(field.type != this.schema.fieldTypes[schemaKey]) {
-		return SCHEMA_DEFINITION_MISMATCH~;
+		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
     _struct_storeField(this, field, (Byte) schemaKey, proc)!;
@@ -600,7 +600,7 @@ fn RS_Field*[]? RS_Struct.getAllWithTag(&this, String tag, RS_Processor* proc)
 
 	RS_Field** fieldArrayPtr = allocOnArena(proc.arena, (RS_Struct*.sizeof) * count);
 	if(!fieldArrayPtr) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 	RS_Field*[] fieldArray = fieldArrayPtr[0 : count];
 
@@ -640,16 +640,16 @@ fn void? RS_Struct.addBool(&this, String tag, bool val, RS_Processor* proc)
 {
     int schemaKey = this.schema.getSchemaKey(tag);
     if(schemaKey == -1) {
-		return UNDEFINED_SCHEMA_TAG~;
+		return RS_UNDEFINED_SCHEMA_TAG~;
     }
 
 	if(this.schema.fieldTypes[schemaKey] != RS_FieldType.BOOL) {
-		return SCHEMA_DEFINITION_MISMATCH~;
+		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
     RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
 	if(!field) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     field.type = this.schema.fieldTypes[schemaKey];
@@ -667,16 +667,16 @@ fn void? RS_Struct.addByte(&this, String tag, Byte val, RS_Processor* proc)
 {
     int schemaKey = this.schema.getSchemaKey(tag);
     if(schemaKey == -1) {
-		return UNDEFINED_SCHEMA_TAG~;
+		return RS_UNDEFINED_SCHEMA_TAG~;
     }
 
 	if(this.schema.fieldTypes[schemaKey] != RS_FieldType.BYTE) {
-		return SCHEMA_DEFINITION_MISMATCH~;
+		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
     RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
 	if(!field) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     field.type = this.schema.fieldTypes[schemaKey];
@@ -694,16 +694,16 @@ fn void? RS_Struct.addShort(&this, String tag, ushort val, RS_Processor* proc)
 {
     int schemaKey = this.schema.getSchemaKey(tag);
     if(schemaKey == -1) {
-		return UNDEFINED_SCHEMA_TAG~;
+		return RS_UNDEFINED_SCHEMA_TAG~;
     }
 
 	if(this.schema.fieldTypes[schemaKey] != RS_FieldType.SHORT) {
-		return SCHEMA_DEFINITION_MISMATCH~;
+		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
     RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
 	if(!field) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     field.type = this.schema.fieldTypes[schemaKey];
@@ -721,16 +721,16 @@ fn void? RS_Struct.addInt(&this, String tag, uint val, RS_Processor* proc)
 {
     int schemaKey = this.schema.getSchemaKey(tag);
     if(schemaKey == -1) {
-		return UNDEFINED_SCHEMA_TAG~;
+		return RS_UNDEFINED_SCHEMA_TAG~;
     }
 
 	if(this.schema.fieldTypes[schemaKey] != RS_FieldType.INT) {
-		return SCHEMA_DEFINITION_MISMATCH~;
+		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
     RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
 	if(!field) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     field.type = this.schema.fieldTypes[schemaKey];
@@ -748,16 +748,16 @@ fn void? RS_Struct.addLong(&this, String tag, ulong val, RS_Processor* proc)
 {
     int schemaKey = this.schema.getSchemaKey(tag);
    	if(schemaKey == -1) {
-		return UNDEFINED_SCHEMA_TAG~;
+		return RS_UNDEFINED_SCHEMA_TAG~;
     }
 
 	if(this.schema.fieldTypes[schemaKey] != RS_FieldType.LONG) {
-		return SCHEMA_DEFINITION_MISMATCH~;
+		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
     RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
 	if(!field) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     field.type = this.schema.fieldTypes[schemaKey];
@@ -775,16 +775,16 @@ fn void? RS_Struct.addFloat(&this, String tag, float val, RS_Processor* proc)
 {
     int schemaKey = this.schema.getSchemaKey(tag);
     if(schemaKey == -1) {
-		return UNDEFINED_SCHEMA_TAG~;
+		return RS_UNDEFINED_SCHEMA_TAG~;
     }
 
 	if(this.schema.fieldTypes[schemaKey] != RS_FieldType.FLOAT) {
-		return SCHEMA_DEFINITION_MISMATCH~;
+		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
     RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
 	if(!field) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     field.type = this.schema.fieldTypes[schemaKey];
@@ -802,16 +802,16 @@ fn void? RS_Struct.addDouble(&this, String tag, double val, RS_Processor* proc)
 {
     int schemaKey = this.schema.getSchemaKey(tag);
 	if(schemaKey == -1) {
-		return UNDEFINED_SCHEMA_TAG~;
+		return RS_UNDEFINED_SCHEMA_TAG~;
     }
 
 	if(this.schema.fieldTypes[schemaKey] != RS_FieldType.DOUBLE) {
-		return SCHEMA_DEFINITION_MISMATCH~;
+		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
     RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
 	if(!field) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     field.type = this.schema.fieldTypes[schemaKey];
@@ -829,16 +829,16 @@ fn void? RS_Struct.addString(&this, String tag, String val, RS_Processor* proc)
 {
     int schemaKey = this.schema.getSchemaKey(tag);
     if(schemaKey == -1) {
-		return UNDEFINED_SCHEMA_TAG~;
+		return RS_UNDEFINED_SCHEMA_TAG~;
     }
 
 	if(this.schema.fieldTypes[schemaKey] != RS_FieldType.STRING) {
-		return SCHEMA_DEFINITION_MISMATCH~;
+		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
     RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
 	if(!field) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     field.type = this.schema.fieldTypes[schemaKey];
@@ -856,16 +856,16 @@ fn void? RS_Struct.addBytes(&this, String tag, Byte* byteArray, int arrayLength,
 {
     int schemaKey = this.schema.getSchemaKey(tag);
     if(schemaKey == -1) {
-		return UNDEFINED_SCHEMA_TAG~;
+		return RS_UNDEFINED_SCHEMA_TAG~;
     }
 
 	if(this.schema.fieldTypes[schemaKey] != RS_FieldType.RAW) {
-		return SCHEMA_DEFINITION_MISMATCH~;
+		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
     RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
 	if(!field) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     field.type = this.schema.fieldTypes[schemaKey];
@@ -883,16 +883,16 @@ fn void? RS_Struct.addStruct(&this, String tag, RS_Struct* nestedStruct, RS_Proc
 {
     int schemaKey = this.schema.getSchemaKey(tag);
     if(schemaKey == -1) {
-		return UNDEFINED_SCHEMA_TAG~;
+		return RS_UNDEFINED_SCHEMA_TAG~;
     }
 
 	if(this.schema.fieldTypes[schemaKey] != RS_FieldType.STRUCT) {
-		return SCHEMA_DEFINITION_MISMATCH~;
+		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
     RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
 	if(!field) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     field.type = this.schema.fieldTypes[schemaKey];
@@ -959,7 +959,7 @@ fn void? _setByteWriterMemory(RS_ByteWriter* writer, RS_Arena* arena)
     writer.currentMark = -1;
 	writer.buffer = (Byte*) allocOnArena(arena, writer.bufferCapacity);
 	if(!writer.buffer) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 }
 
@@ -989,7 +989,7 @@ fn void? RS_ByteWriter.expandbuffer(&this, int nextWriteSize)
 	ulong newBufferCapacity = _calcNewBufferSize(this.bufferCapacity, this.currentPos, nextWriteSize);
     Byte* newBuffer = (Byte*) allocOnArena(this.arena, newBufferCapacity);
 	if(!newBuffer) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     mem::copy(newBuffer, this.buffer, this.bufferCapacity);
@@ -1022,7 +1022,7 @@ fn Byte*? RS_ByteWriter.getTrimmedbufferCopy(&this, int* copyLength)
     int length = this.currentPos - this.marks[this.currentMark];
     Byte* copy = (Byte*) allocOnArena(this.arena, length);
 	if(!copy) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     mem::copy(copy, &this.buffer[this.marks[this.currentMark]], length);
@@ -1063,7 +1063,7 @@ fn void? _setByteReaderMemory(RS_ByteReader* reader, RS_Arena* arena)
 {
 	reader.buffer = (Byte*) allocOnArena(arena, reader.bufferCapacity);
 	if(!reader.buffer) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
 	reader.currentPos = 0;
@@ -1082,7 +1082,7 @@ fn void? RS_ByteReader.expandbuffer(&this, int nextWriteSize)
 	ulong newBufferCapacity = _calcNewBufferSize(this.bufferCapacity, this.currentPos, nextWriteSize);	
 	Byte* newBuffer = (Byte*) allocOnArena(this.arena, newBufferCapacity);
 	if(!newBuffer) {
-		return ARENA_OUT_OF_MEMORY~;
+		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
     mem::copy(newBuffer, this.buffer, this.bufferCapacity);
@@ -1225,7 +1225,7 @@ fn Byte*? writeStructToBytes(RS_Processor* proc, RS_Struct* rs_struct, int* byte
 
             int dataLength = field.bufferLength;
             if(dataLength > 65535) {
-                //TODO: Do something here that reflects we cannot serialize that many bytes because we are limited to a two-byte length value.
+                return RS_FIELD_TOO_LONG~;
             }
             proc.writer.write((Byte) ((dataLength & 0xFFFF) >> 8))!;
             proc.writer.write((Byte) (dataLength & 0xFF))!;
@@ -1239,17 +1239,14 @@ fn Byte*? writeStructToBytes(RS_Processor* proc, RS_Struct* rs_struct, int* byte
             case BYTE:
                 proc.writer.write((Byte) field.byteVal)!;
             case SHORT:
-                //proc.writer.writeBytes((Byte*) &field.shortVal, 2)!;
 				proc.writer.write((Byte) (field.shortVal >> 8))!;
 				proc.writer.write((Byte) (field.shortVal & 0xFF))!;
             case INT:
-                //proc.writer.writeBytes((Byte*) &field.intVal, 4)!;
 				proc.writer.write((Byte) (field.intVal >> 24) & 0xFF)!;
 				proc.writer.write((Byte) (field.intVal >> 16) & 0xFF)!;
 				proc.writer.write((Byte) (field.intVal >> 8) & 0xFF)!;
 				proc.writer.write((Byte) (field.intVal & 0xFF))!;
             case LONG:
-                //proc.writer.writeBytes((Byte*) &field.longVal, 8)!;
 				proc.writer.write((Byte) (field.longVal >> 56) & 0xFF)!;
 				proc.writer.write((Byte) (field.longVal >> 48) & 0xFF)!;
 				proc.writer.write((Byte) (field.longVal >> 40) & 0xFF)!;
@@ -1259,14 +1256,12 @@ fn Byte*? writeStructToBytes(RS_Processor* proc, RS_Struct* rs_struct, int* byte
 				proc.writer.write((Byte) (field.longVal >> 8) & 0xFF)!;
 				proc.writer.write((Byte) (field.longVal & 0xFF))!;
             case FLOAT:
-                //proc.writer.writeBytes((Byte*) &field.floatVal, 4)!;
 				//Use the int type from the union to perfrom bitshifting
 				proc.writer.write((Byte) (field.intVal >> 24) & 0xFF)!;
 				proc.writer.write((Byte) (field.intVal >> 16) & 0xFF)!;
 				proc.writer.write((Byte) (field.intVal >> 8) & 0xFF)!;
 				proc.writer.write((Byte) (field.intVal & 0xFF))!;
             case DOUBLE:
-                //proc.writer.writeBytes((Byte*) &field.doubleVal, 8)!;
 				//Use the long type from the union to perfrom bitshifting
 				proc.writer.write((Byte) (field.longVal >> 56) & 0xFF)!;
 				proc.writer.write((Byte) (field.longVal >> 48) & 0xFF)!;
@@ -1308,7 +1303,7 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
         int schemaKey = proc.reader.read();
         RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
 		if(!field) {
-			return ARENA_OUT_OF_MEMORY~;
+			return RS_ARENA_OUT_OF_MEMORY~;
 		}
 
         field.type = rs_struct.schema.fieldTypes[schemaKey];
@@ -1351,11 +1346,11 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
 
         Byte* rawValue = (Byte*) allocOnArena(proc.arena, length);
 		if(!rawValue) {
-			return ARENA_OUT_OF_MEMORY~;
+			return RS_ARENA_OUT_OF_MEMORY~;
 		}
         int bytesRead = proc.reader.readBytes(rawValue, length);
         if(bytesRead < length) {
-            //TODO: do something here because we underflowed
+            return RS_STRUCT_UNDERFLOW~;
         }
 
 		//All this crazy bitshifting stuff is to enforce network byte order/big endian
@@ -1366,13 +1361,11 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
                 field.byteVal = *(Byte*) rawValue;
             case SHORT:
 			{
-                //field.shortVal = *(short*) rawValue;
 				field.shortVal = rawValue[0] << 8;
 				field.shortVal += rawValue[1];
 			}
 			case INT:
 			{
-                //field.intVal = *(int*) rawValue;
 				field.intVal = rawValue[0] << 24;
 				field.intVal += rawValue[1] << 16;
 				field.intVal += rawValue[2] << 8;
@@ -1380,7 +1373,6 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
 			}
 			case LONG:
 			{
-                //field.longVal = *(long*) rawValue;
 				field.longVal = ((ulong) rawValue[0]) << 56;
 				field.longVal += ((ulong) rawValue[1]) << 48;
 				field.longVal += ((ulong) rawValue[2]) << 40;
@@ -1392,7 +1384,6 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
 			}
 			case FLOAT:
 			{
-                //field.floatVal = *(float*) rawValue;
 				//Using intVal from the union to perform bitshifting
 				field.intVal = rawValue[0] << 24;
 				field.intVal += rawValue[1] << 16;
@@ -1401,7 +1392,6 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
 			}
             case DOUBLE:
 			{
-                //field.doubleVal = *(double*) rawValue;
 				//Using longVal from the union to perform bitshifting
 				field.longVal = ((ulong) rawValue[0]) << 56;
 				field.longVal += ((ulong) rawValue[1]) << 48;
@@ -1420,7 +1410,7 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
             {
                 RS_Struct* nestedStruct = (RS_Struct*) allocOnArena(proc.arena, RS_Struct.sizeof);
 				if(!nestedStruct) {
-					return ARENA_OUT_OF_MEMORY~;
+					return RS_ARENA_OUT_OF_MEMORY~;
 				}
                 initStruct(nestedStruct, nestedSchema);
 				setStructMemory(nestedStruct, proc)!;
@@ -1433,5 +1423,4 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
     }
 
     proc.reader.popBytes();
-
 }
