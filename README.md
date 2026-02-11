@@ -61,7 +61,7 @@ rsStruct.addByte("CIDR", 24, proc)!!;
 rsStruct.addString("Name", "Home network", proc)!!;
 ~~~
 
-This should be mostly self explanatory.  You pass in the `RS_Processor` because an `RS_Field` has to be instantiated for every field that is added, we use the `RS_Processor`'s associated `RS_Arena` to handle that.  **TODO: insert error handling details here when finished, like "what happends when an undefined schema tag is used?"** **FYI**, you can add more than one piece of data under the same tag as long as it is the same type. I.e., you could add another raw byte array with the tag "IPAddress", but it would be up to the receiver of the serialized bytes to know to look for an additional byte array with the tag "IPAddress".  Now let's serialize some data!
+This should be mostly self explanatory.  You pass in the `RS_Processor` because an `RS_Field` has to be instantiated for every field that is added, we use the `RS_Processor`'s associated `RS_Arena` to handle that.  **FYI**, you can add more than one piece of data under the same tag as long as it is the same type. I.e., you could add another raw byte array with the tag "IPAddress", but it would be up to the receiver of the serialized bytes to know to look for an additional byte array with the tag "IPAddress".  Now let's serialize some data!
 
 ## Serialization
 
@@ -250,5 +250,6 @@ fn int main()
 ~~~
 
 Copyright (c) 2026, Noah McLean
+
 
 
