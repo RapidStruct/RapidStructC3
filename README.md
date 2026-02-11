@@ -1,6 +1,6 @@
 # RapidStructC3
 
-RapidStruct is a simple schema-based binary serialization format. Read up on the specs for more info on RapidStruct itself. This guide is only concerned with the usage of the C3 language library implementation.  To start using this library, simply copy rapidstruct.c3 to your source folder.  Below is a quick rundown of the basics.  For the sake of simplicity, we will force unwrap all optionals, but you probably won't want to do that in production.
+RapidStruct is a simple schema-based binary serialization format. Read up on the specs for more info on RapidStruct itself. This guide is only concerned with the usage of the C3 language library implementation.  For more info on the standard, [go here](https://github.com/RapidStruct/).  To start using this library, simply copy rapidstruct.c3 to your source folder.  Below is a quick rundown of the basics.  For the sake of simplicity, we will force unwrap all optionals, but you probably won't want to do that in production.
 
 ## Schemas
 
@@ -250,3 +250,4 @@ fn int main()
 ~~~
 
 Copyright (c) 2026, Noah McLean
+
