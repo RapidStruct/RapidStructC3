@@ -24,6 +24,13 @@ module rapidstruct;
 import std::core::mem;
 
 faultdef RS_ARENA_OUT_OF_MEMORY, RS_UNDEFINED_SCHEMA_TAG, RS_SCHEMA_DEFINITION_MISMATCH, RS_FIELD_TOO_LONG, RS_STRUCT_UNDERFLOW;
+
+<*
+Simply an integer that represents a key that can be used instead of the tag String for accessing fields.
+It refers to the exact same thing as a tag String, but bypasses the need to check String equivalence.
+-1 indicates that something went wrong while adding a field to a schema
+*>
+typedef RS_SchemaKey = inline int;
 alias Byte = char;
 const uint EXPANSION_INCREMENT = 4096;
 
@@ -128,14 +135,15 @@ struct RS_Schema {
 <*
 Adds a field definition to this schema.
 Do not added a nested struct definition here, instead use RS_Schema.addStructToSchema()
+If you get past the contract, the returned RS_SchemaKey will be invalid (-1)
 @require type != RS_FieldType.STRUCT : "Must use RS_Schema.addStructToSchema() for nested structs"
 *>
-fn void RS_Schema.addFieldToSchema(&this, String tag, RS_FieldType type)
+fn RS_SchemaKey RS_Schema.addFieldToSchema(&this, String tag, RS_FieldType type)
 {
     if(type == RS_FieldType.STRUCT) {
         //TODO: is there a better way to handle this?
 		//If you get past the contract somehow then do nothing as you need a schema with a struct.
-		return;
+		return (RS_SchemaKey) -1;
     }
 
     //Check for duplicate tag definition
@@ -145,19 +153,20 @@ fn void RS_Schema.addFieldToSchema(&this, String tag, RS_FieldType type)
 			//If you duplicate a tag, you overwrite it
 			this.fieldTypes[i] = type;
 			this.fieldTags[i] = tag;
-			return;
+			return (RS_SchemaKey) i;
         }
     }
 
     this.fieldTypes[this.tagCount] = type;
     this.fieldTags[this.tagCount] = tag;
     this.tagCount++;
+	return (RS_SchemaKey) this.tagCount - 1;
 }
 
 <*
 Adds a nested struct field definition to this schema.
 *>
-fn void RS_Schema.addStructToSchema(&this, String tag, RS_Schema* nestedSchemaToAdd)
+fn RS_SchemaKey RS_Schema.addStructToSchema(&this, String tag, RS_Schema* nestedSchemaToAdd)
 {
     //Check for duplicate tag definition
     for(int i = 0; i < this.tagCount; i++) {
@@ -167,7 +176,7 @@ fn void RS_Schema.addStructToSchema(&this, String tag, RS_Schema* nestedSchemaTo
 			this.fieldTypes[i] = RS_FieldType.STRUCT;
    			this.fieldTags[i] = tag;
     		this.nestedSchemas[i] = nestedSchemaToAdd;
-			return;
+			return (RS_SchemaKey) i;
         }
     }
 
@@ -175,21 +184,22 @@ fn void RS_Schema.addStructToSchema(&this, String tag, RS_Schema* nestedSchemaTo
     this.fieldTags[this.tagCount] = tag;
     this.nestedSchemas[this.tagCount] = nestedSchemaToAdd;
     this.tagCount++;
+	return (RS_SchemaKey) this.tagCount - 1;
 }
 
 <*
 Returns the key associated with a given tag.
 Returns -1 if there is no definition for that tag.
 *>
-fn int RS_Schema.getSchemaKey(&this, String tag)
+fn RS_SchemaKey RS_Schema.getSchemaKey(&this, String tag)
 {
     for(int i = 0; i < this.tagCount; i++) {
         if(this.fieldTags[i] == tag) {
-            return i;
+            return (RS_SchemaKey) i;
         }
     }
 
-    return -1;
+    return (RS_SchemaKey) -1;
 }
 
 //********
@@ -535,7 +545,7 @@ fn void? _struct_expandFieldArray(RS_Struct* rs_struct, RS_Processor* proc) @pri
 Internal function for taking a field and storing it on an RS_Struct's field array.
 This may fail if the field array has to be expanded and the arena runs out of memory.
 *>
-fn void? _struct_storeField(RS_Struct* rs_struct, RS_Field* field, Byte schemaKey, RS_Processor* proc) @private
+fn void? _struct_storeField(RS_Struct* rs_struct, RS_Field* field, RS_SchemaKey schemaKey, RS_Processor* proc) @private
 {
     if(rs_struct.fieldCount == rs_struct.fieldCapacity) {
         //Expand things here
@@ -544,7 +554,7 @@ fn void? _struct_storeField(RS_Struct* rs_struct, RS_Field* field, Byte schemaKe
 
     rs_struct.fields[rs_struct.fieldCount] = field;
 
-    rs_struct.schemaKeys[rs_struct.fieldCount] = schemaKey;
+    rs_struct.schemaKeys[rs_struct.fieldCount] = (Byte) schemaKey;
     rs_struct.fieldCount++;
 }
 
@@ -555,7 +565,17 @@ This may fail if the field array has to be expanded and the arena runs out of me
 *>
 fn void? RS_Struct.add(&this, String tag, RS_Field* field, RS_Processor* proc)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	this.addWithKey(schemaKey, field, proc)!;
+}
+
+<*
+Takes an RS_Field pointer and stores it on this RS_Struct's field array.
+Again, only stores the pointer.
+This may fail if the field array has to be expanded and the arena runs out of memory or a key was passed that is undefined or of the wrong type.
+*>
+fn void? RS_Struct.addWithKey(&this, RS_SchemaKey schemaKey, RS_Field* field, RS_Processor* proc)
+{
     if(schemaKey == -1) {
 		return RS_UNDEFINED_SCHEMA_TAG~;
     }
@@ -564,7 +584,7 @@ fn void? RS_Struct.add(&this, String tag, RS_Field* field, RS_Processor* proc)
 		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
-    _struct_storeField(this, field, (Byte) schemaKey, proc)!;
+    _struct_storeField(this, field, schemaKey, proc)!;
 }
 
 <*
@@ -573,7 +593,17 @@ Returns null if this RS_Struct does not contain any field with that tag.
 *>
 fn RS_Field* RS_Struct.get(&this, String tag)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	return this.getWithKey(schemaKey);
+}
+
+<*
+This is an alternative to get() in order to bypass String comparison.
+Returns the first RS_Field* that matches the given key.
+Returns null if this RS_Struct does not contain any field with that key.
+*>
+fn RS_Field* RS_Struct.getWithKey(&this, RS_SchemaKey schemaKey)
+{
     for(int i = 0; i < this.fieldCount; i++) {
         if(this.schemaKeys[i] == schemaKey) {
             return this.fields[i];
@@ -590,8 +620,18 @@ This allocates the resulting array on the arena associated with the passed RS_Pr
 *>
 fn RS_Field*[]? RS_Struct.getAllWithTag(&this, String tag, RS_Processor* proc)
 {
+	RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	return this.getAllWithKey(schemaKey, proc)!;
+}
+
+<*
+Returns an RS_Field* array containing all RS_Fields that have then passed tag.
+Will return an empty array if there are no fields with a matching tag.
+This allocates the resulting array on the arena associated with the passed RS_Processor, and may fail if the arena runs out of memory.
+*>
+fn RS_Field*[]? RS_Struct.getAllWithKey(&this, RS_SchemaKey schemaKey, RS_Processor* proc)
+{
 	int count = 0;
-	int schemaKey = this.schema.getSchemaKey(tag);
     for(int i = 0; i < this.fieldCount; i++) {
         if(this.schemaKeys[i] == schemaKey) {
             count++;
@@ -621,7 +661,16 @@ Returns false if there are none.
 *>
 fn bool RS_Struct.hasField(&this, String tag)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	return this.hasFieldWithKey(schemaKey);
+}
+
+<*
+Returns true if there is at least one field in this RS_Struct that has a matching key.
+Returns false if there are none.
+*>
+fn bool RS_Struct.hasFieldWithKey(&this, RS_SchemaKey schemaKey)
+{
     for(int i = 0; i < this.fieldCount; i++) {
         if(this.schemaKeys[i] == schemaKey) {
             return true;
@@ -638,7 +687,18 @@ This also may fail if the tag is undefined or the tag belongs to a different typ
 *>
 fn void? RS_Struct.addBool(&this, String tag, bool val, RS_Processor* proc)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	this.addBoolWithKey(schemaKey, val, proc)!;
+}
+
+<*
+This is an alternative to addBool() in order to bypass String comparison.
+Creates and adds a BOOL field with the given key and value.
+This may fail if there is not enough memory in the arena to support allocating a field or any other allocations relating to adding a field.
+This also may fail if the key is undefined or the key belongs to a different type.
+*>
+fn void? RS_Struct.addBoolWithKey(&this, RS_SchemaKey schemaKey, bool val, RS_Processor* proc)
+{
     if(schemaKey == -1) {
 		return RS_UNDEFINED_SCHEMA_TAG~;
     }
@@ -655,7 +715,7 @@ fn void? RS_Struct.addBool(&this, String tag, bool val, RS_Processor* proc)
     field.type = this.schema.fieldTypes[schemaKey];
     field.putBool(val);
 
-    _struct_storeField(this, field, (Byte) schemaKey, proc)!;
+    _struct_storeField(this, field, schemaKey, proc)!;
 }
 
 <*
@@ -665,7 +725,18 @@ This also may fail if the tag is undefined or the tag belongs to a different typ
 *>
 fn void? RS_Struct.addByte(&this, String tag, Byte val, RS_Processor* proc)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	this.addByteWithKey(schemaKey, val, proc)!;
+}
+
+<*
+This is an alternative to addByte() in order to bypass String comparison.
+Creates and adds a BYTE field with the given key and value.
+This may fail if there is not enough memory in the arena to support allocating a field or any other allocations relating to adding a field.
+This also may fail if the key is undefined or the key belongs to a different type.
+*>
+fn void? RS_Struct.addByteWithKey(&this, RS_SchemaKey schemaKey, Byte val, RS_Processor* proc)
+{
     if(schemaKey == -1) {
 		return RS_UNDEFINED_SCHEMA_TAG~;
     }
@@ -682,7 +753,7 @@ fn void? RS_Struct.addByte(&this, String tag, Byte val, RS_Processor* proc)
     field.type = this.schema.fieldTypes[schemaKey];
     field.putByte(val);
 
-    _struct_storeField(this, field, (Byte) schemaKey, proc)!;
+    _struct_storeField(this, field, schemaKey, proc)!;
 }
 
 <*
@@ -692,7 +763,18 @@ This also may fail if the tag is undefined or the tag belongs to a different typ
 *>
 fn void? RS_Struct.addShort(&this, String tag, ushort val, RS_Processor* proc)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	this.addShortWithKey(schemaKey, val, proc)!;
+}
+
+<*
+This is an alternative to addShort() in order to bypass String comparison.
+Creates and adds a SHORT field with the given key and value.
+This may fail if there is not enough memory in the arena to support allocating a field or any other allocations relating to adding a field.
+This also may fail if the key is undefined or the key belongs to a different type.
+*>
+fn void? RS_Struct.addShortWithKey(&this, RS_SchemaKey schemaKey, ushort val, RS_Processor* proc)
+{
     if(schemaKey == -1) {
 		return RS_UNDEFINED_SCHEMA_TAG~;
     }
@@ -709,7 +791,7 @@ fn void? RS_Struct.addShort(&this, String tag, ushort val, RS_Processor* proc)
     field.type = this.schema.fieldTypes[schemaKey];
     field.putShort(val);
 
-    _struct_storeField(this, field, (Byte) schemaKey, proc)!;
+    _struct_storeField(this, field, schemaKey, proc)!;
 }
 
 <*
@@ -719,7 +801,18 @@ This also may fail if the tag is undefined or the tag belongs to a different typ
 *>
 fn void? RS_Struct.addInt(&this, String tag, uint val, RS_Processor* proc)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	this.addIntWithKey(schemaKey, val, proc)!;
+}
+
+<*
+This is an alternative to addInt() in order to bypass String comparison.
+Creates and adds an INT field with the given key and value.
+This may fail if there is not enough memory in the arena to support allocating a field or any other allocations relating to adding a field.
+This also may fail if the key is undefined or the key belongs to a different type.
+*>
+fn void? RS_Struct.addIntWithKey(&this, RS_SchemaKey schemaKey, uint val, RS_Processor* proc)
+{
     if(schemaKey == -1) {
 		return RS_UNDEFINED_SCHEMA_TAG~;
     }
@@ -736,7 +829,7 @@ fn void? RS_Struct.addInt(&this, String tag, uint val, RS_Processor* proc)
     field.type = this.schema.fieldTypes[schemaKey];
     field.putInt(val);
 
-    _struct_storeField(this, field, (Byte) schemaKey, proc)!;
+    _struct_storeField(this, field, schemaKey, proc)!;
 }
 
 <*
@@ -746,7 +839,18 @@ This also may fail if the tag is undefined or the tag belongs to a different typ
 *>
 fn void? RS_Struct.addLong(&this, String tag, ulong val, RS_Processor* proc)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	this.addLongWithKey(schemaKey, val, proc)!;
+}
+
+<*
+This is an alternative to addLong() in order to bypass String comparison.
+Creates and adds a LONG field with the given key and value.
+This may fail if there is not enough memory in the arena to support allocating a field or any other allocations relating to adding a field.
+This also may fail if the key is undefined or the key belongs to a different type.
+*>
+fn void? RS_Struct.addLongWithKey(&this, RS_SchemaKey schemaKey, ulong val, RS_Processor* proc)
+{
    	if(schemaKey == -1) {
 		return RS_UNDEFINED_SCHEMA_TAG~;
     }
@@ -763,7 +867,7 @@ fn void? RS_Struct.addLong(&this, String tag, ulong val, RS_Processor* proc)
     field.type = this.schema.fieldTypes[schemaKey];
     field.putLong(val);
 
-    _struct_storeField(this, field, (Byte) schemaKey, proc)!;
+    _struct_storeField(this, field, schemaKey, proc)!;
 }
 
 <*
@@ -773,7 +877,18 @@ This also may fail if the tag is undefined or the tag belongs to a different typ
 *>
 fn void? RS_Struct.addFloat(&this, String tag, float val, RS_Processor* proc)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	this.addFloatWithKey(schemaKey, val, proc)!;
+}
+
+<*
+This is an alternative to addFloat() in order to bypass String comparison.
+Creates and adds a FLOAT field with the given key and value.
+This may fail if there is not enough memory in the arena to support allocating a field or any other allocations relating to adding a field.
+This also may fail if the key is undefined or the key belongs to a different type.
+*>
+fn void? RS_Struct.addFloatWithKey(&this, RS_SchemaKey schemaKey, float val, RS_Processor* proc)
+{
     if(schemaKey == -1) {
 		return RS_UNDEFINED_SCHEMA_TAG~;
     }
@@ -790,7 +905,7 @@ fn void? RS_Struct.addFloat(&this, String tag, float val, RS_Processor* proc)
     field.type = this.schema.fieldTypes[schemaKey];
     field.putFloat(val);
 
-    _struct_storeField(this, field, (Byte) schemaKey, proc)!;
+    _struct_storeField(this, field, schemaKey, proc)!;
 }
 
 <*
@@ -800,7 +915,18 @@ This also may fail if the tag is undefined or the tag belongs to a different typ
 *>
 fn void? RS_Struct.addDouble(&this, String tag, double val, RS_Processor* proc)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	this.addDoubleWithKey(schemaKey, val, proc)!;
+}
+
+<*
+This is an alternative to addDouble() in order to bypass String comparison.
+Creates and adds a DOUBLE field with the given key and value.
+This may fail if there is not enough memory in the arena to support allocating a field or any other allocations relating to adding a field.
+This also may fail if the key is undefined or the key belongs to a different type.
+*>
+fn void? RS_Struct.addDoubleWithKey(&this, RS_SchemaKey schemaKey, double val, RS_Processor* proc)
+{
 	if(schemaKey == -1) {
 		return RS_UNDEFINED_SCHEMA_TAG~;
     }
@@ -817,7 +943,7 @@ fn void? RS_Struct.addDouble(&this, String tag, double val, RS_Processor* proc)
     field.type = this.schema.fieldTypes[schemaKey];
     field.putDouble(val);
 
-    _struct_storeField(this, field, (Byte) schemaKey, proc)!;
+    _struct_storeField(this, field, schemaKey, proc)!;
 }
 
 <*
@@ -827,7 +953,18 @@ This also may fail if the tag is undefined or the tag belongs to a different typ
 *>
 fn void? RS_Struct.addString(&this, String tag, String val, RS_Processor* proc)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	this.addStringWithKey(schemaKey, val, proc)!;
+}
+
+<*
+This is an alternative to addString() in order to bypass String comparison.
+Creates and adds a STRING field with the given key and value.
+This may fail if there is not enough memory in the arena to support allocating a field or any other allocations relating to adding a field.
+This also may fail if the key is undefined or the key belongs to a different type.
+*>
+fn void? RS_Struct.addStringWithKey(&this, RS_SchemaKey schemaKey, String val, RS_Processor* proc)
+{
     if(schemaKey == -1) {
 		return RS_UNDEFINED_SCHEMA_TAG~;
     }
@@ -844,7 +981,7 @@ fn void? RS_Struct.addString(&this, String tag, String val, RS_Processor* proc)
     field.type = this.schema.fieldTypes[schemaKey];
     field.putString(val, proc)!;
 
-    _struct_storeField(this, field, (Byte) schemaKey, proc)!;
+    _struct_storeField(this, field, schemaKey, proc)!;
 }
 
 <*
@@ -852,9 +989,20 @@ Creates and adds a RAW field with the given tag and value.
 This may fail if there is not enough memory in the arena to support allocating a field or any other allocations relating to adding a field.
 This also may fail if the tag is undefined or the tag belongs to a different type.
 *>
-fn void? RS_Struct.addBytes(&this, String tag, Byte* byteArray, int arrayLength, RS_Processor* proc)
+fn void? RS_Struct.addBytes(&this, String tag, Byte* byteArray, uint arrayLength, RS_Processor* proc)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	this.addBytesWithKey(schemaKey, byteArray, arrayLength, proc)!;
+}
+
+<*
+This is an alternative to addBytes() in order to bypass String comparison.
+Creates and adds a RAW field with the given key and value.
+This may fail if there is not enough memory in the arena to support allocating a field or any other allocations relating to adding a field.
+This also may fail if the key is undefined or the key belongs to a different type.
+*>
+fn void? RS_Struct.addBytesWithKey(&this, RS_SchemaKey schemaKey, Byte* byteArray, uint arrayLength, RS_Processor* proc)
+{
     if(schemaKey == -1) {
 		return RS_UNDEFINED_SCHEMA_TAG~;
     }
@@ -871,7 +1019,7 @@ fn void? RS_Struct.addBytes(&this, String tag, Byte* byteArray, int arrayLength,
     field.type = this.schema.fieldTypes[schemaKey];
     field.putBytes(byteArray, arrayLength, proc)!;
 
-    _struct_storeField(this, field, (Byte) schemaKey, proc)!;
+    _struct_storeField(this, field, schemaKey, proc)!;
 }
 
 <*
@@ -881,7 +1029,18 @@ This also may fail if the tag is undefined or the tag belongs to a different typ
 *>
 fn void? RS_Struct.addStruct(&this, String tag, RS_Struct* nestedStruct, RS_Processor* proc)
 {
-    int schemaKey = this.schema.getSchemaKey(tag);
+    RS_SchemaKey schemaKey = this.schema.getSchemaKey(tag);
+	this.addStructWithKey(schemaKey, nestedStruct, proc)!;
+}
+
+<*
+This is an alternative to addStruct() in order to bypass String comparison.
+Creates and adds a nested STRUCT field with the given key and value.
+This may fail if there is not enough memory in the arena to support allocating a field or any other allocations relating to adding a field.
+This also may fail if the key is undefined or the key belongs to a different type.
+*>
+fn void? RS_Struct.addStructWithKey(&this, RS_SchemaKey schemaKey, RS_Struct* nestedStruct, RS_Processor* proc)
+{
     if(schemaKey == -1) {
 		return RS_UNDEFINED_SCHEMA_TAG~;
     }
@@ -898,7 +1057,7 @@ fn void? RS_Struct.addStruct(&this, String tag, RS_Struct* nestedStruct, RS_Proc
     field.type = this.schema.fieldTypes[schemaKey];
     field.putStruct(nestedStruct);
 
-    _struct_storeField(this, field, (Byte) schemaKey, proc)!;
+    _struct_storeField(this, field, schemaKey, proc)!;
 }
 
 //************
@@ -1017,9 +1176,9 @@ fn void? RS_ByteWriter.writeBytes(&this, Byte* array, int arrayLength)
     this.currentPos += arrayLength;
 }
 
-fn Byte*? RS_ByteWriter.getTrimmedbufferCopy(&this, int* copyLength)
+fn Byte*? RS_ByteWriter.getTrimmedbufferCopy(&this, uint* copyLength)
 {
-    int length = this.currentPos - this.marks[this.currentMark];
+    uint length = this.currentPos - this.marks[this.currentMark];
     Byte* copy = (Byte*) allocOnArena(this.arena, length);
 	if(!copy) {
 		return RS_ARENA_OUT_OF_MEMORY~;
@@ -1203,22 +1362,22 @@ the integer pointer passed in will be dereferenced and modified to reflect how l
 This serializes the data into network byte order/big endian, as is the RapidStruct standard.
 This may fail if the arena runs out of memory while performing this serialization event.
 *>
-fn Byte*? writeStructToBytes(RS_Processor* proc, RS_Struct* rs_struct, int* bytesWritten)
+fn Byte*? writeStructToBytes(RS_Processor* proc, RS_Struct* rs_struct, uint* bytesWritten)
 {
     proc.writer.pushMark();
 
     for(int i = 0; i < rs_struct.fieldCount; i++) {
         //write the index/tag first
-        Byte schemaKey = rs_struct.schemaKeys[i];
+        RS_SchemaKey schemaKey = (RS_SchemaKey) rs_struct.schemaKeys[i];
         RS_Field* field = rs_struct.fields[i];
-        proc.writer.write(schemaKey)!;
+        proc.writer.write((Byte) schemaKey)!;
 
         //Determine if it's a variable length field or not
         //Because if that's the case, we need to specify the length
         if(field.type == RS_FieldType.STRING || field.type == RS_FieldType.RAW || field.type == RS_FieldType.STRUCT) {
             if(field.type == RS_FieldType.STRUCT) {
                 //We have to actually serialize to bytes first to get the length for a struct.
-                int nestedStructBytesWritten;
+                uint nestedStructBytesWritten;
                 Byte* structBytes = writeStructToBytes(proc, field.rs_struct, &nestedStructBytesWritten)!;
                 field.putBytes(structBytes, nestedStructBytesWritten, proc)!;
             }
@@ -1279,7 +1438,7 @@ fn Byte*? writeStructToBytes(RS_Processor* proc, RS_Struct* rs_struct, int* byte
         }
     }
 
-    int structBytesWritten;
+    uint structBytesWritten;
     Byte* bytes = proc.writer.getTrimmedbufferCopy(&structBytesWritten)!;
     proc.writer.goToLastMark();
     proc.writer.popMark();
@@ -1300,7 +1459,7 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
 
     while(proc.reader.numBytesRemaining() > 0) {
         //Get schema key/index
-        int schemaKey = proc.reader.read();
+        RS_SchemaKey schemaKey = (RS_SchemaKey) proc.reader.read();
         RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
 		if(!field) {
 			return RS_ARENA_OUT_OF_MEMORY~;

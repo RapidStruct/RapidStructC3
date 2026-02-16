@@ -249,6 +249,25 @@ fn int main()
 
 ~~~
 
+## String Comparison Elimination
+
+If you need to increase speed, instead of using the tag Strings to refer to fields, you can instead use an `RS_SchemaKey`, which is what the tag Strings are converted to anyways.  This allows you to eliminate String comparison operations.  To use them, when creating an `RS_Schema`, simply assign an `RS_SchemaKey` to the return value of `addFieldToSchema()` or `addStructToSchema()`:
+
+~~~
+RS_Schema schema;
+RS_SchemaKey msKey = schema.addFieldToSchema("Milliseconds", RS_FieldType.LONG);
+
+//You can also grab the key afterwords as well
+msKey = schema.getSchemaKey("Milliseconds");
+~~~
+
+And instead of using the normal accessing methods, use the ...withKey variants:
+
+~~~
+rsStruct.addLongWithKey(msKey, 12345);
+long ms = rsStruct.getWithKey(msKey).asLong();
+~~~
+
 Copyright (c) 2026, Noah McLean
 
 
