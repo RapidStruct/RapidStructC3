@@ -257,7 +257,7 @@ If you need to increase speed, instead of using the tag Strings to refer to fiel
 RS_Schema schema;
 RS_SchemaKey msKey = schema.addFieldToSchema("Milliseconds", RS_FieldType.LONG);
 
-//You can also grab the key afterwords as well
+//You can also grab the key afterwords
 msKey = schema.getSchemaKey("Milliseconds");
 ~~~
 
