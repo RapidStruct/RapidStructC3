@@ -4,7 +4,7 @@ RapidStruct is a bare-bones, schema-based binary serialization format. Read up o
 
 ## Schemas
 
-Because RapidStruct is schema-based, you must have schema's defined. This is done by using an `RS_Schema`. An `RS_Schema` is simply a collection of types associated to tags and ultimately defines how the data will be represented when serialized. Create a schema either on the stack or the heap, either will work.  It just depends on you memeory needs.  After creation, simply add fields to it:  
+Because RapidStruct is schema-based, you must have schemas defined. This is done by using an `RS_Schema`. An `RS_Schema` is simply a collection of types associated to tags and ultimately defines how the data will be represented when serialized. Create a schema either on the stack or the heap, either will work.  It just depends on you memeory needs.  After creation, simply add fields to it:  
 
 ~~~
 RS_Schema subnetSchema;
@@ -14,7 +14,7 @@ subnetSchema.addFieldToSchema("CIDR", RS_FieldType.BYTE);
 subnetSchema.addFieldToSchema("Name", RS_FieldType.STRING);
 ~~~
 
-In this example we created a schema to describe a subnet.  First, we use a `BOOL` type to indicate if this is an IPv4 or IPv6 network. Then we are using a `RAW` type to represent the bytes of the IP address (`RAW` just indicates a byte array). We used the `BYTE` type to indicate the CIDR/mask length. And finally, a `STRING` to represent the name of the subnet.  All types are assumed to be unsigned.  You must convert them if you need signed values. `RAW` is obviously the most flexible and can essentially be used to represent anything.  `STRING` may be platform dependant, but generally speaking should at least support ASCII (the 1st seven bytes of UTF-8 codes is ASCII, for instance.)
+In this example we created a schema to describe a subnet.  First, we use a `BOOL` type to indicate if this is an IPv4 or IPv6 network. Then we are using a `RAW` type to represent the bytes of the IP address (`RAW` just indicates a byte array). We used the `BYTE` type to indicate the CIDR/mask length. And finally, a `STRING` to represent the name of the subnet.  All types are assumed to be unsigned.  You must convert them if you need signed values. `RAW` is obviously the most flexible and can essentially be used to represent anything.  `STRING` may be platform dependant, but generally speaking should at least support ASCII (the 1st seven bits of UTF-8 codes is ASCII, for instance.)
 
 ## RS_Processor
 
@@ -56,7 +56,7 @@ This tells the `RS_Processor` to record the `RS_Arena`'s next available address.
 ~~~
 rsStruct.addBool("IPV6", false, proc)!!;
 char[*] address = {192, 168, 0, 1};
-rsStruct.addBytes("IPAddress, address, address.len, proc)!!;
+rsStruct.addBytes("IPAddress", address, address.len, proc)!!;
 rsStruct.addByte("CIDR", 24, proc)!!;
 rsStruct.addString("Name", "Home network", proc)!!;
 ~~~
@@ -138,7 +138,7 @@ If you need your memory back for whatever reason and you're completely done usin
 - All of your data that is **NOT** of a primitive type (primitives meaning int, float, etc) lives in a buffer that is backed by a `RS_Arena`.  That means that if you have a byte array (or similar) that was deserialized and you call `setProcessorMemory()` and then start deserializing again, that byte array may now be corrupted.  So once you receive some data and deserialize it into a `RS_Struct`, it is probably best to copy the data you need AND THEN do your processing so that you can safely reuse your `RS_Processor`, `RS_Struct`, etc.  
 - The maximum number of defined tags in a schema is 256, as they are represented with 1-byte.
 - You can have an essentially unlimited amount of fields in one RS_Struct if they share tags.  This is limited by your `RS_Arena` size, of course.
-- The maximum length of the variable-length field types (`RAW`, `STRING`, and `STRUCT`-which is a nested `RS_Struct`) is 65535, as they are prepended with a 2-byte length when serialized.
+- The maximum length of the variable-length field types (`RAW`, `STRING`, and `STRUCT`-which is a nested `RS_Struct`) is 0xFFFFFFFF, as they are prepended with a 4-byte length when serialized.
 
 
 ## Full Serialization Example
@@ -159,11 +159,11 @@ fn int main()
 	//RS_Processor setup
     RS_Arena arena;
     rapidstruct::initArena(&arena, 1024 * 1024);
-    RS_Processor* proc = (RS_Processor*) rapidstruct::allocOnArena(&arena, RS_Processor.sizeof);
+    RS_Processor* proc = (RS_Processor*) rapidstruct::allocOnArena(&arena, RS_Processor::size);
     rapidstruct::initProcessor(proc, &arena);
 
     //Main struct
-    RS_Struct* rs_birthday = (RS_Struct*) rapidstruct::allocOnArena(&arena, RS_Struct.sizeof);
+    RS_Struct* rs_birthday = (RS_Struct*) rapidstruct::allocOnArena(&arena, RS_Struct::size);
 	rapidstruct::initStruct(rs_birthday, &birthdaySchema);
 	rapidstruct::markProcessorMemBaseline(proc);
 
@@ -214,11 +214,11 @@ fn int main()
 	//RS_Processor setup
     RS_Arena arena;
     rapidstruct::initArena(&arena, 1024 * 1024);
-    RS_Processor* proc = (RS_Processor*) rapidstruct::allocOnArena(&arena, RS_Processor.sizeof);
+    RS_Processor* proc = (RS_Processor*) rapidstruct::allocOnArena(&arena, RS_Processor::size);
     rapidstruct::initProcessor(proc, &arena);
 
     //Main struct
-    RS_Struct* rs_birthday = (RS_Struct*) rapidstruct::allocOnArena(&arena, RS_Struct.sizeof);
+    RS_Struct* rs_birthday = (RS_Struct*) rapidstruct::allocOnArena(&arena, RS_Struct::size);
 	rapidstruct::initStruct(rs_birthday, &birthdaySchema);
 	rapidstruct::markProcessorMemBaseline(proc);
 
@@ -269,8 +269,3 @@ long ms = rsStruct.getWithKey(msKey).asLong();
 ~~~
 
 Copyright (c) 2026, Noah McLean
-
-
-
-
-
