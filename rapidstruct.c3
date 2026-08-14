@@ -51,7 +51,7 @@ This returns the base memory address for the allocated memory, which may be null
 *>
 fn void* initArena(RS_Arena* arena, usz size)
 {
-    arena.rootPtr = malloc(size);
+    arena.rootPtr = malloc((sz) size);
     arena.nextPtr = arena.rootPtr;
     arena.size = size;
 
@@ -92,7 +92,7 @@ fn void* allocOnArena(RS_Arena* arena, usz size)
     void* block = arena.nextPtr;
 	usz alignmentCorrection = _calcAlignmentCorrection(size);
     arena.nextPtr = (void*) (((Byte*) block) + size) + alignmentCorrection;
-    arena.currentBytesAllocated += size;
+    arena.currentBytesAllocated += size + alignmentCorrection;
 
     return block;
 }
@@ -328,9 +328,9 @@ Unlike all of the other accessor methods, this one does not care about what it's
 You can use this however you wish, but this will be useless if it is a primitive type.
 This may fail if the arena runs out of memory.
 *>
-fn void? RS_Field.putBytes(&this, Byte* bytes, int length, RS_Processor* proc)
+fn void? RS_Field.putBytes(&this, Byte* bytes, uint length, RS_Processor* proc)
 {
-    Byte* buffer = (Byte*) allocOnArena(proc.arena, length);
+    Byte* buffer = (Byte*) allocOnArena(proc.arena, (usz) length);
 	if(!buffer) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
@@ -488,7 +488,7 @@ fn void initStruct(RS_Struct* rs_struct, RS_Schema* schema)
 Initializes this RS_Struct with the given schema and sets the initial field capacity.
 One of the init functions must be called before use and before setStructMemory().
 *>
-fn void initStructWCapacity(RS_Struct* rs_struct, RS_Schema* schema, int initialFieldCapacity)
+fn void initStructWCapacity(RS_Struct* rs_struct, RS_Schema* schema, uint initialFieldCapacity)
 {
     rs_struct.schema = schema;
 
@@ -508,7 +508,7 @@ fn void? setStructMemory(RS_Struct* rs_struct, RS_Processor* proc)
 	rs_struct.fieldCount = 0;
 
 	Byte* schemaKeyArray = (Byte*) allocOnArena(proc.arena, rs_struct.fieldCapacity);
-    RS_Field** fieldArray = (RS_Field**) allocOnArena(proc.arena, RS_Field*.sizeof * rs_struct.fieldCapacity);
+    RS_Field** fieldArray = (RS_Field**) allocOnArena(proc.arena, RS_Field*::size * rs_struct.fieldCapacity);
 
 	if(!schemaKeyArray || !fieldArray) {
 		return RS_ARENA_OUT_OF_MEMORY~;
@@ -527,14 +527,14 @@ fn void? _struct_expandFieldArray(RS_Struct* rs_struct, RS_Processor* proc) @pri
 	//Just a simple doubling
 	uint newfieldCapacity = rs_struct.fieldCapacity * 2;
 	Byte* newSchemaKeyArray = (Byte*) allocOnArena(proc.arena, newfieldCapacity);
-	RS_Field** newFieldArray = (RS_Field**) allocOnArena(proc.arena, RS_Field*.sizeof * newfieldCapacity);
+	RS_Field** newFieldArray = (RS_Field**) allocOnArena(proc.arena, RS_Field*::size * newfieldCapacity);
 
 	if(!newSchemaKeyArray || !newFieldArray) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 
 	mem::copy(newSchemaKeyArray, rs_struct.schemaKeys, rs_struct.fieldCount);
-	mem::copy(newFieldArray, rs_struct.fields, RS_Field*.sizeof * rs_struct.fieldCount);
+	mem::copy(newFieldArray, rs_struct.fields, RS_Field*::size * rs_struct.fieldCount);
 
 	rs_struct.schemaKeys = newSchemaKeyArray;
 	rs_struct.fields = newFieldArray;
@@ -604,7 +604,7 @@ Returns null if this RS_Struct does not contain any field with that key.
 *>
 fn RS_Field* RS_Struct.getWithKey(&this, RS_SchemaKey schemaKey)
 {
-    for(int i = 0; i < this.fieldCount; i++) {
+    for(uint i = 0; i < this.fieldCount; i++) {
         if(this.schemaKeys[i] == schemaKey) {
             return this.fields[i];
         }
@@ -631,21 +631,21 @@ This allocates the resulting array on the arena associated with the passed RS_Pr
 *>
 fn RS_Field*[]? RS_Struct.getAllWithKey(&this, RS_SchemaKey schemaKey, RS_Processor* proc)
 {
-	int count = 0;
-    for(int i = 0; i < this.fieldCount; i++) {
+	uint count = 0;
+    for(uint i = 0; i < this.fieldCount; i++) {
         if(this.schemaKeys[i] == schemaKey) {
             count++;
         }
     }
 
-	RS_Field** fieldArrayPtr = allocOnArena(proc.arena, (RS_Struct*.sizeof) * count);
+	RS_Field** fieldArrayPtr = allocOnArena(proc.arena, (RS_Struct*::size) * count);
 	if(!fieldArrayPtr) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
 	RS_Field*[] fieldArray = fieldArrayPtr[0 : count];
 
-	int putCount = 0;
-	for(int i = 0; i < this.fieldCount; i++) {
+	uint putCount = 0;
+	for(uint i = 0; i < this.fieldCount; i++) {
 		if(this.schemaKeys[i] == schemaKey) {
 			fieldArray[putCount] = this.fields[i];
 			putCount++;
@@ -671,7 +671,7 @@ Returns false if there are none.
 *>
 fn bool RS_Struct.hasFieldWithKey(&this, RS_SchemaKey schemaKey)
 {
-    for(int i = 0; i < this.fieldCount; i++) {
+    for(uint i = 0; i < this.fieldCount; i++) {
         if(this.schemaKeys[i] == schemaKey) {
             return true;
         }
@@ -707,7 +707,7 @@ fn void? RS_Struct.addBoolWithKey(&this, RS_SchemaKey schemaKey, bool val, RS_Pr
 		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
-    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
+    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field::size);
 	if(!field) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
@@ -745,7 +745,7 @@ fn void? RS_Struct.addByteWithKey(&this, RS_SchemaKey schemaKey, Byte val, RS_Pr
 		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
-    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
+    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field::size);
 	if(!field) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
@@ -783,7 +783,7 @@ fn void? RS_Struct.addShortWithKey(&this, RS_SchemaKey schemaKey, ushort val, RS
 		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
-    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
+    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field::size);
 	if(!field) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
@@ -821,7 +821,7 @@ fn void? RS_Struct.addIntWithKey(&this, RS_SchemaKey schemaKey, uint val, RS_Pro
 		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
-    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
+    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field::size);
 	if(!field) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
@@ -859,7 +859,7 @@ fn void? RS_Struct.addLongWithKey(&this, RS_SchemaKey schemaKey, ulong val, RS_P
 		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
-    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
+    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field::size);
 	if(!field) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
@@ -897,7 +897,7 @@ fn void? RS_Struct.addFloatWithKey(&this, RS_SchemaKey schemaKey, float val, RS_
 		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
-    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
+    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field::size);
 	if(!field) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
@@ -935,7 +935,7 @@ fn void? RS_Struct.addDoubleWithKey(&this, RS_SchemaKey schemaKey, double val, R
 		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
-    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
+    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field::size);
 	if(!field) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
@@ -973,7 +973,7 @@ fn void? RS_Struct.addStringWithKey(&this, RS_SchemaKey schemaKey, String val, R
 		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
-    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
+    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field::size);
 	if(!field) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
@@ -1011,7 +1011,7 @@ fn void? RS_Struct.addBytesWithKey(&this, RS_SchemaKey schemaKey, Byte* byteArra
 		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
-    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
+    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field::size);
 	if(!field) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
@@ -1049,7 +1049,7 @@ fn void? RS_Struct.addStructWithKey(&this, RS_SchemaKey schemaKey, RS_Struct* ne
 		return RS_SCHEMA_DEFINITION_MISMATCH~;
 	}
 
-    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
+    RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field::size);
 	if(!field) {
 		return RS_ARENA_OUT_OF_MEMORY~;
 	}
@@ -1122,7 +1122,7 @@ fn void? _setByteWriterMemory(RS_ByteWriter* writer, RS_Arena* arena)
 	}
 }
 
-fn int RS_ByteWriter.numBytesRemaining(&this)
+fn uint RS_ByteWriter.numBytesRemaining(&this)
 {
     return this.bufferCapacity - this.currentPos;
 }
@@ -1143,9 +1143,9 @@ fn void RS_ByteWriter.goToLastMark(&this)
     this.currentPos = this.marks[this.currentMark];
 }
 
-fn void? RS_ByteWriter.expandbuffer(&this, int nextWriteSize)
+fn void? RS_ByteWriter.expandbuffer(&this, uint nextWriteSize)
 {
-	ulong newBufferCapacity = _calcNewBufferSize(this.bufferCapacity, this.currentPos, nextWriteSize);
+	ulong newBufferCapacity = _calcNewBufferSize(this.bufferCapacity, this.currentPos, (ulong) nextWriteSize);
     Byte* newBuffer = (Byte*) allocOnArena(this.arena, newBufferCapacity);
 	if(!newBuffer) {
 		return RS_ARENA_OUT_OF_MEMORY~;
@@ -1166,7 +1166,7 @@ fn void? RS_ByteWriter.write(&this, Byte b)
 	this.currentPos++;
 }
 
-fn void? RS_ByteWriter.writeBytes(&this, Byte* array, int arrayLength)
+fn void? RS_ByteWriter.writeBytes(&this, Byte* array, uint arrayLength)
 {
     if(this.currentPos + arrayLength >= this.bufferCapacity) {
         this.expandbuffer(arrayLength)!;
@@ -1231,14 +1231,14 @@ fn void? _setByteReaderMemory(RS_ByteReader* reader, RS_Arena* arena)
     reader.currentLengthIndex = 0;
 }
 
-fn int RS_ByteReader.numBytesRemaining(&this)
+fn uint RS_ByteReader.numBytesRemaining(&this)
 {
     return this.lengths[this.currentLengthIndex] - this.currentPos;
 }
 
-fn void? RS_ByteReader.expandbuffer(&this, int nextWriteSize)
+fn void? RS_ByteReader.expandbuffer(&this, uint nextWriteSize)
 {
-	ulong newBufferCapacity = _calcNewBufferSize(this.bufferCapacity, this.currentPos, nextWriteSize);	
+	ulong newBufferCapacity = _calcNewBufferSize(this.bufferCapacity, this.lengths[this.currentLengthIndex], (ulong) nextWriteSize);	
 	Byte* newBuffer = (Byte*) allocOnArena(this.arena, newBufferCapacity);
 	if(!newBuffer) {
 		return RS_ARENA_OUT_OF_MEMORY~;
@@ -1249,16 +1249,16 @@ fn void? RS_ByteReader.expandbuffer(&this, int nextWriteSize)
     this.bufferCapacity = (uint) newBufferCapacity;
 }
 
-fn void? RS_ByteReader.pushBytes(&this, Byte* array, int arrayLength)
+fn void? RS_ByteReader.pushBytes(&this, Byte* array, uint arrayLength)
 {
-    if(this.currentPos + arrayLength >= this.bufferCapacity) {
+    if(this.lengths[this.currentLengthIndex] + arrayLength >= this.bufferCapacity) {
         this.expandbuffer(arrayLength)!;
     }
 
     this.currentMarkIndex++;
     this.marks[this.currentMarkIndex] = this.currentPos;
 
-    int oldLength = this.lengths[this.currentLengthIndex];
+    uint oldLength = this.lengths[this.currentLengthIndex];
     mem::copy(&this.buffer[oldLength], array, arrayLength);
     this.currentPos = oldLength;
 
@@ -1285,10 +1285,10 @@ Fills the passed array with the next set of bytes.
 Attempts to fill the entire array, but may not have enough bytes left.
 This returns the number of bytes that were actually read into the array.
 */
-fn int RS_ByteReader.readBytes(&this, Byte* array, int arrayLength)
+fn uint RS_ByteReader.readBytes(&this, Byte* array, uint arrayLength)
 {
-    int bytesLeft = this.numBytesRemaining();
-    int bytesRead = arrayLength < bytesLeft ? arrayLength : bytesLeft;
+    uint bytesLeft = this.numBytesRemaining();
+    uint bytesRead = arrayLength < bytesLeft ? arrayLength : bytesLeft;
     mem::copy(array, &this.buffer[this.currentPos], bytesRead);
     this.currentPos += bytesRead;
     return bytesRead;
@@ -1319,8 +1319,8 @@ fn void initProcessor(RS_Processor* proc, RS_Arena* arena)
 
 	//We won't check for null on these allocs because If you can't get enough
 	//memory on the arena for this, you have real problems you need to fix
-    proc.writer = (RS_ByteWriter*) allocOnArena(arena, RS_ByteWriter.sizeof);
-    proc.reader = (RS_ByteReader*) allocOnArena(arena, RS_ByteReader.sizeof);
+    proc.writer = (RS_ByteWriter*) allocOnArena(arena, RS_ByteWriter::size);
+    proc.reader = (RS_ByteReader*) allocOnArena(arena, RS_ByteReader::size);
 
 	_initByteWriter(proc.writer, arena);
 	_initByteReader(proc.reader, arena);
@@ -1366,7 +1366,7 @@ fn Byte*? writeStructToBytes(RS_Processor* proc, RS_Struct* rs_struct, uint* byt
 {
     proc.writer.pushMark();
 
-    for(int i = 0; i < rs_struct.fieldCount; i++) {
+    for(uint i = 0; i < rs_struct.fieldCount; i++) {
         //write the index/tag first
         RS_SchemaKey schemaKey = (RS_SchemaKey) rs_struct.schemaKeys[i];
         RS_Field* field = rs_struct.fields[i];
@@ -1382,10 +1382,12 @@ fn Byte*? writeStructToBytes(RS_Processor* proc, RS_Struct* rs_struct, uint* byt
                 field.putBytes(structBytes, nestedStructBytesWritten, proc)!;
             }
 
-            int dataLength = field.bufferLength;
-            if(dataLength > 65535) {
+            uint dataLength = field.bufferLength;
+            if(dataLength > 0xFFFFFFFF) {
                 return RS_FIELD_TOO_LONG~;
             }
+			proc.writer.write((Byte) ((dataLength & 0xFFFFFFFF) >> 24))!;
+			proc.writer.write((Byte) ((dataLength & 0xFFFFFF) >> 16))!;
             proc.writer.write((Byte) ((dataLength & 0xFFFF) >> 8))!;
             proc.writer.write((Byte) (dataLength & 0xFF))!;
         }
@@ -1452,7 +1454,7 @@ This takes a byte array and deserializes it into the passed RS_Struct.
 This deserializes the data from network byte order/big endian, as is the RapidStruct standard.
 This may fail for a variety of reasons, and running out of memory in the arena is the primary concern.
 *>
-fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength, RS_Struct* rs_struct)
+fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, uint rawDataLength, RS_Struct* rs_struct)
 {
     setStructMemory(rs_struct, proc)!;
     proc.reader.pushBytes(rawData, rawDataLength)!;
@@ -1460,7 +1462,7 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
     while(proc.reader.numBytesRemaining() > 0) {
         //Get schema key/index
         RS_SchemaKey schemaKey = (RS_SchemaKey) proc.reader.read();
-        RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field.sizeof);
+        RS_Field* field = (RS_Field*) allocOnArena(proc.arena, RS_Field::size);
 		if(!field) {
 			return RS_ARENA_OUT_OF_MEMORY~;
 		}
@@ -1468,7 +1470,7 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
         field.type = rs_struct.schema.fieldTypes[schemaKey];
         RS_Schema* nestedSchema = null;
 
-        int length = 0;
+        uint length = 0;
 
         switch(field.type) {
             case BOOL:
@@ -1489,13 +1491,17 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
             case STRING:
             case RAW:
             {
-                length = proc.reader.read() << 8;
+				length = proc.reader.read() << 24;
+				length += proc.reader.read() << 16;
+                length += proc.reader.read() << 8;
                 length += proc.reader.read();
             }
 
             case STRUCT:
             {
-                length = proc.reader.read() << 8;
+                length = proc.reader.read() << 24;
+				length += proc.reader.read() << 16;
+                length += proc.reader.read() << 8;
                 length += proc.reader.read();
 
                 //Retrieve nested schema
@@ -1503,11 +1509,11 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
             }
         }
 
-        Byte* rawValue = (Byte*) allocOnArena(proc.arena, length);
+        Byte* rawValue = (Byte*) allocOnArena(proc.arena, (usz) length);
 		if(!rawValue) {
 			return RS_ARENA_OUT_OF_MEMORY~;
 		}
-        int bytesRead = proc.reader.readBytes(rawValue, length);
+        uint bytesRead = proc.reader.readBytes(rawValue, length);
         if(bytesRead < length) {
             return RS_STRUCT_UNDERFLOW~;
         }
@@ -1567,12 +1573,11 @@ fn void? readBytesToStruct(RS_Processor* proc, Byte* rawData, int rawDataLength,
 
             case STRUCT:
             {
-                RS_Struct* nestedStruct = (RS_Struct*) allocOnArena(proc.arena, RS_Struct.sizeof);
+                RS_Struct* nestedStruct = (RS_Struct*) allocOnArena(proc.arena, RS_Struct::size);
 				if(!nestedStruct) {
 					return RS_ARENA_OUT_OF_MEMORY~;
 				}
                 initStruct(nestedStruct, nestedSchema);
-				setStructMemory(nestedStruct, proc)!;
                 readBytesToStruct(proc, rawValue, length, nestedStruct)!;
                 field.putStruct(nestedStruct);
             }
