@@ -24,7 +24,7 @@ The `RS_Processor` is what performs the serialization/deserialization.  You can 
 RS_Arena arena;
 rapidstruct::initArena(&arena, 1024 * 1024);
 
-RS_Processor* proc (RS_Processor*) rapidstruct::allocateOnArena(&arena, RS_Processor.sizeof);
+RS_Processor* proc (RS_Processor*) rapidstruct::allocateOnArena(&arena, RS_Processor::size);
 rapidstruct::initProcessor(proc, &arena);
 ~~~
 
@@ -35,7 +35,7 @@ Here we created an `RS_Arena` with a 1 MiB allocation.  We then used the arena t
 Next is the `RS_Struct`.  This is the core of the library and simply holds a common grouping of data.  In this example, I will simply continue to reuse the same `RS_Struct` over and over.  I recommend that you do the same unless you have a specific reason not to (E.g., multiple nested `RS_Struct`s of an unknown quantity may be difficult to repeatedly reuse).
 
 ~~~
-RS_Struct* rsStruct = (RS_Struct*) rapidstruct::allocOnArena(&arena, RS_Struct.sizeof);
+RS_Struct* rsStruct = (RS_Struct*) rapidstruct::allocOnArena(&arena, RS_Struct::size);
 rapidstruct::initStruct(rsStruct, &schema);
 ~~~
 
@@ -121,7 +121,7 @@ And to grab the nested `RS_Struct` after deserialization:
 
 ~~~
 //Instantiate and deserialize the main RS_Struct...
-RS_Struct* outerrsStruct = (RS_Struct*) rapidstruct::allocOnArena(&arena, RS_Struct.sizeof);
+RS_Struct* outerrsStruct = (RS_Struct*) rapidstruct::allocOnArena(&arena, RS_Struct::size);
 rapidstruct::initStruct(outerrsStruct, schema);
 rapidstruct::readBytesToStruct(proc, serialBytes, serialBytesLength, outerrsStruct)!!;
 
