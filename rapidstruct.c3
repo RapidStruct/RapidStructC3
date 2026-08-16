@@ -1197,87 +1197,51 @@ fn Byte*? RS_ByteWriter.getTrimmedbufferCopy(&this, uint* copyLength)
 //The byte reader and writer are mostly just private
 //implementation details and generally can be ignored
 //by the library user unless modifying things
+struct RS_ByteRecord {
+	uint length;
+	uint pos;
+	Byte *data;
+	RS_ByteRecord *previousRecord;
+}
 
 struct RS_ByteReader {
-    Byte* buffer;
-    uint bufferCapacity;
-    uint currentPos;
-
-    uint[1024] marks;
-    int currentMarkIndex;
-
-    uint[1024] lengths;
-    int currentLengthIndex;
+	RS_ByteRecord *currentRecord;
 
     RS_Arena* arena;
 }
 
 fn void _initByteReader(RS_ByteReader* reader, RS_Arena* arena) @private
 {
-	reader.bufferCapacity = EXPANSION_INCREMENT;
+	reader.currentRecord = null;
 	reader.arena = arena;
-}
-
-fn void? _setByteReaderMemory(RS_ByteReader* reader, RS_Arena* arena)
-{
-	reader.buffer = (Byte*) allocOnArena(arena, reader.bufferCapacity);
-	if(!reader.buffer) {
-		return RS_ARENA_OUT_OF_MEMORY~;
-	}
-
-	reader.currentPos = 0;
-    reader.currentMarkIndex = -1;
-    reader.lengths[0] = 0;
-    reader.currentLengthIndex = 0;
 }
 
 fn uint RS_ByteReader.numBytesRemaining(&this)
 {
-    return this.lengths[this.currentLengthIndex] - this.currentPos;
-}
-
-fn void? RS_ByteReader.expandbuffer(&this, uint nextWriteSize)
-{
-	ulong newBufferCapacity = _calcNewBufferSize(this.bufferCapacity, this.lengths[this.currentLengthIndex], (ulong) nextWriteSize);	
-	Byte* newBuffer = (Byte*) allocOnArena(this.arena, newBufferCapacity);
-	if(!newBuffer) {
-		return RS_ARENA_OUT_OF_MEMORY~;
-	}
-
-    mem::copy(newBuffer, this.buffer, this.bufferCapacity);
-    this.buffer = newBuffer;
-    this.bufferCapacity = (uint) newBufferCapacity;
+	return this.currentRecord.length - this.currentRecord.pos;
 }
 
 fn void? RS_ByteReader.pushBytes(&this, Byte* array, uint arrayLength)
 {
-    if(this.lengths[this.currentLengthIndex] + arrayLength >= this.bufferCapacity) {
-        this.expandbuffer(arrayLength)!;
-    }
-
-    this.currentMarkIndex++;
-    this.marks[this.currentMarkIndex] = this.currentPos;
-
-    uint oldLength = this.lengths[this.currentLengthIndex];
-    mem::copy(&this.buffer[oldLength], array, arrayLength);
-    this.currentPos = oldLength;
-
-    this.currentLengthIndex++;
-    this.lengths[this.currentLengthIndex] = oldLength + arrayLength;
+	RS_ByteRecord *rec = (RS_ByteRecord*) allocOnArena(this.arena, RS_ByteRecord::size);
+	rec.data = array;
+	rec.length = arrayLength;
+	rec.pos = 0;
+	rec.previousRecord = this.currentRecord;
+	this.currentRecord = rec;
 }
 
 fn void RS_ByteReader.popBytes(&this)
 {
-    this.currentPos = this.marks[this.currentMarkIndex];
-    this.currentMarkIndex--;
-    this.currentLengthIndex--;
+	this.currentRecord = this.currentRecord.previousRecord;
 }
 
 fn Byte RS_ByteReader.read(&this)
 {
-    Byte b = this.buffer[this.currentPos];
-    this.currentPos++;
-    return b;
+	RS_ByteRecord *rec = this.currentRecord;
+	Byte b = rec.data[rec.pos];
+	rec.pos++;
+	return b;
 }
 
 /*
@@ -1287,11 +1251,12 @@ This returns the number of bytes that were actually read into the array.
 */
 fn uint RS_ByteReader.readBytes(&this, Byte* array, uint arrayLength)
 {
-    uint bytesLeft = this.numBytesRemaining();
-    uint bytesRead = arrayLength < bytesLeft ? arrayLength : bytesLeft;
-    mem::copy(array, &this.buffer[this.currentPos], bytesRead);
-    this.currentPos += bytesRead;
-    return bytesRead;
+	RS_ByteRecord *rec = this.currentRecord;
+	uint bytesLeft = this.numBytesRemaining();
+	uint bytesRead = arrayLength < bytesLeft ? arrayLength : bytesLeft;
+	mem::copy(array, &rec.data[rec.pos], bytesRead);
+	rec.pos += bytesRead;
+	return bytesRead;
 }
 
 //************
@@ -1353,7 +1318,6 @@ fn void? setProcessorMemory(RS_Processor* proc)
     proc.arena.currentBytesAllocated = proc.baseBytesAlloc;
 
 	_setByteWriterMemory(proc.writer, proc.arena)!;
-	_setByteReaderMemory(proc.reader, proc.arena)!;
 }
 
 <*
